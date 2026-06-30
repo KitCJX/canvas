@@ -21,6 +21,7 @@ Built with Next.js (static export) + Tauri v2.
 - **Undo delete** — moving a project or canvas to trash shows an undo toast
 - **Canvas operations** — duplicate a canvas including its data, move it to a different project, export one canvas, or export one project
 - **Backup import/export** — export all projects/canvases as JSON and import that backup later
+- **Data health tools** — inspect database location, project/canvas/trash/version counts, version storage size, and prune old versions
 - **Recency sorting** — canvases are ordered by last-opened time so the most recent work surfaces first
 - **Keyboard shortcuts** — `Cmd/Ctrl+N`, `Cmd/Ctrl+K`, `Cmd/Ctrl+S`, and `Escape`
 
@@ -180,6 +181,20 @@ interface BackupData {
 ```
 
 Single-canvas exports contain one `Canvas`. Project exports contain `{ version: 1, project, canvases }`.
+
+---
+
+## Data Health
+
+The sidebar includes a **Data health** panel for local maintenance:
+
+- Database location
+- Active project and canvas counts
+- Trash counts
+- Saved version count
+- Approximate version-history storage size
+- Backup reminder
+- Prune action that keeps the latest 10 versions per canvas
 
 ---
 

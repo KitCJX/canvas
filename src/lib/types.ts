@@ -33,3 +33,13 @@ export interface BackupData {
   projects: Project[];
   canvases: Canvas[];
 }
+
+export interface DataHealth {
+  databaseLocation: string;
+  projectCount: number;
+  canvasCount: number;
+  trashedProjectCount: number;
+  trashedCanvasCount: number;
+  versionCount: number;
+  versionBytes: number;
+}
