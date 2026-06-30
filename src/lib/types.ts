@@ -24,6 +24,7 @@ export interface CanvasVersion {
   canvasId: string;
   data: string;
   thumbnail: string | null;
+  label: string | null;
   createdAt: string;
 }
 

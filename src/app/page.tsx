@@ -241,6 +241,13 @@ export default function Home() {
     if (view.kind === "editor" && view.canvas.id === canvas.id) setView({ kind: "editor", canvas });
   }, [view]);
 
+  const handleCanvasCreated = useCallback(async (canvas: Canvas) => {
+    setCanvases((prev) => [canvas, ...prev]);
+    await reloadProjects();
+    await refreshCanvases(selectedProject?.id);
+    setToast({ message: "Canvas copy created." });
+  }, [refreshCanvases, reloadProjects, selectedProject]);
+
   const handleExportCanvas = useCallback((canvas: Canvas) => {
     downloadJson(`${canvas.name.replaceAll("/", "-")}.canvas.json`, canvas);
   }, []);
@@ -354,6 +361,7 @@ export default function Home() {
         onDelete={handleDeleteCanvas}
         onExport={handleExportCanvas}
         onCanvasSaved={handleCanvasSaved}
+        onCanvasCreated={handleCanvasCreated}
       />
     );
   }

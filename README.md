@@ -14,7 +14,7 @@ Built with Next.js (static export) + Tauri v2.
 - **Global search** — search canvases by canvas name, project name, or canvas type with `Cmd/Ctrl+K`
 - **Auto-save with status** — changes are debounced and written to SQLite automatically, with `Unsaved`, `Saving`, `Saved`, and `Save failed` states
 - **Manual save flush** — `Cmd/Ctrl+S` immediately flushes pending editor changes
-- **Version history** — each successful save creates a capped local snapshot; restore older versions from the editor
+- **Version history** — each successful save creates a capped local snapshot; preview, label, restore, or restore older versions as copies from the editor
 - **Thumbnail cards** — generated canvas thumbnails make grid, recent, and search views easier to scan
 - **Right-click workflows** — context menus for projects and canvases expose rename, duplicate, move, export, and trash actions
 - **Soft delete & Trash** — projects and canvases are moved to trash rather than deleted immediately; restore or permanently delete from the Trash panel

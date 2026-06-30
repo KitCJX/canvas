@@ -180,7 +180,7 @@ export async function saveCanvasData(id: string, data: string, thumbnail?: strin
 export async function listCanvasVersions(canvasId: string): Promise<CanvasVersion[]> {
   const db = await getDb();
   return db.select<CanvasVersion[]>(
-    `SELECT id, canvasId, data, thumbnail, createdAt
+    `SELECT id, canvasId, data, thumbnail, label, createdAt
      FROM CanvasVersion
      WHERE canvasId = ?
      ORDER BY createdAt DESC`,
@@ -190,6 +190,24 @@ export async function listCanvasVersions(canvasId: string): Promise<CanvasVersio
 
 export async function restoreCanvasVersion(canvasId: string, version: CanvasVersion): Promise<void> {
   await saveCanvasData(canvasId, version.data, version.thumbnail);
+}
+
+export async function labelCanvasVersion(versionId: string, label: string | null): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE CanvasVersion SET label = ? WHERE id = ?", [label, versionId]);
+}
+
+export async function restoreCanvasVersionAsCopy(canvas: Canvas, version: CanvasVersion): Promise<Canvas> {
+  const db = await getDb();
+  const id = crypto.randomUUID();
+  const updatedAt = new Date().toISOString();
+  const name = `${canvas.name} (${new Date(version.createdAt).toLocaleDateString()} restore)`;
+  const thumbnail = version.thumbnail ?? createCanvasThumbnail(name, canvas.type, version.data);
+  await db.execute(
+    "INSERT INTO Canvas (id, projectId, name, type, data, thumbnail, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    [id, canvas.projectId, name, canvas.type, version.data, thumbnail, updatedAt]
+  );
+  return { id, projectId: canvas.projectId, name, type: canvas.type, data: version.data, thumbnail, updatedAt, openedAt: null, deletedAt: null };
 }
 
 export async function softDeleteCanvas(id: string): Promise<void> {
