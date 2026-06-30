@@ -59,6 +59,7 @@ export default function Home() {
   const [toast, setToast] = useState<{ message: string; action?: () => void } | null>(null);
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
+  const [draggingCanvas, setDraggingCanvas] = useState<Canvas | null>(null);
 
   // Trash state
   const [showTrash, setShowTrash] = useState(false);
@@ -198,6 +199,12 @@ export default function Home() {
       if (view.kind === "editor" && view.canvas.id === canvas.id) setView({ kind: "grid" });
     } catch (err) { console.error(err); }
   }, [view, reloadProjects, refreshCanvases, selectedProject]);
+
+  const handleDropCanvasOnProject = useCallback((project: Project) => {
+    if (!draggingCanvas || draggingCanvas.projectId === project.id) return;
+    handleMoveCanvas(draggingCanvas, project.id);
+    setDraggingCanvas(null);
+  }, [draggingCanvas, handleMoveCanvas]);
 
   const handleDeleteCanvas = useCallback((canvas: Canvas) => {
     setPendingDelete({ kind: "canvas", item: canvas });
@@ -370,6 +377,8 @@ export default function Home() {
         onExport={handleExportProject}
         onExportBackup={handleExportBackup}
         onImportBackup={handleImportBackup}
+        draggingCanvasProjectId={draggingCanvas?.projectId ?? null}
+        onDropCanvas={handleDropCanvasOnProject}
         onTrash={() => { loadTrash(); setShowTrash(true); }}
         trashCount={trashCount}
       />
@@ -447,6 +456,8 @@ export default function Home() {
             onDuplicate={handleDuplicateCanvas}
             onMove={handleMoveCanvas}
             onExport={handleExportCanvas}
+            onDragStart={setDraggingCanvas}
+            onDragEnd={() => setDraggingCanvas(null)}
           />
         )}
       </main>

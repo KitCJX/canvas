@@ -20,6 +20,7 @@ Built with Next.js (static export) + Tauri v2.
 - **Soft delete & Trash** — projects and canvases are moved to trash rather than deleted immediately; restore or permanently delete from the Trash panel
 - **Undo delete** — moving a project or canvas to trash shows an undo toast
 - **Canvas operations** — duplicate a canvas including its data, move it to a different project, export one canvas, or export one project
+- **Drag-and-drop movement** — drag canvas cards onto sidebar projects to move them quickly
 - **Backup import/export** — export all projects/canvases as JSON and import that backup later
 - **Recency sorting** — canvases are ordered by last-opened time so the most recent work surfaces first
 - **Keyboard shortcuts** — `Cmd/Ctrl+N`, `Cmd/Ctrl+K`, `Cmd/Ctrl+S`, and `Escape`
