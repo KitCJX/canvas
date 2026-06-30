@@ -2,11 +2,12 @@
 
 // This file is only ever loaded via dynamic(..., { ssr: false })
 // so browser-only imports are safe here.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Excalidraw } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import debounce from "lodash.debounce";
-import { createCanvasThumbnail, saveCanvasData } from "@/lib/db";
+import { saveCanvasData } from "@/lib/db";
+import { captureLiveThumbnail } from "@/lib/thumbnails";
 import type { Canvas } from "@/lib/types";
 // Type-only imports via the package's wildcard export
 import type { AppState } from "@excalidraw/excalidraw/types";
@@ -21,6 +22,7 @@ interface Props {
 }
 
 export default function ExcalidrawEditor({ canvas, onSaveStatus, onSaved, saveSignal = 0 }: Props) {
+  const rootRef = useRef<HTMLDivElement>(null);
   const [initialData] = useState(() => {
     if (!canvas.data) return undefined;
     try {
@@ -32,20 +34,8 @@ export default function ExcalidrawEditor({ canvas, onSaveStatus, onSaved, saveSi
 
   const [debouncedSave] = useState(() =>
     debounce(
-      async (
-        elements: readonly OrderedExcalidrawElement[],
-        appState: AppState
-      ) => {
+      async (data: string, thumbnail: string) => {
         try {
-          const data = JSON.stringify({
-            elements,
-            appState: {
-              viewBackgroundColor: appState.viewBackgroundColor,
-              currentItemFontFamily: appState.currentItemFontFamily,
-              theme: appState.theme,
-            },
-          });
-          const thumbnail = createCanvasThumbnail(canvas.name, canvas.type, data);
           onSaveStatus?.("saving");
           await saveCanvasData(canvas.id, data, thumbnail);
           onSaved?.(data, thumbnail);
@@ -67,14 +57,23 @@ export default function ExcalidrawEditor({ canvas, onSaveStatus, onSaved, saveSi
       elements: readonly OrderedExcalidrawElement[],
       appState: AppState
     ) => {
+      const data = JSON.stringify({
+        elements,
+        appState: {
+          viewBackgroundColor: appState.viewBackgroundColor,
+          currentItemFontFamily: appState.currentItemFontFamily,
+          theme: appState.theme,
+        },
+      });
+      const thumbnail = captureLiveThumbnail(rootRef.current, canvas.name, canvas.type, data);
       onSaveStatus?.("dirty");
-      debouncedSave(elements, appState);
+      debouncedSave(data, thumbnail);
     },
-    [debouncedSave, onSaveStatus]
+    [canvas.name, canvas.type, debouncedSave, onSaveStatus]
   );
 
   return (
-    <div className="absolute inset-0">
+    <div ref={rootRef} className="absolute inset-0">
       <Excalidraw
         initialData={initialData}
         onChange={handleChange}
