@@ -27,6 +27,8 @@ import {
   exportBackup,
   importBackup,
 } from "@/lib/db";
+import { applyThemePreference, DEFAULT_APP_SETTINGS, loadAppSettings, saveAppSettings } from "@/lib/settings";
+import type { AppSettings } from "@/lib/settings";
 import type { Project, Canvas } from "@/lib/types";
 import { Loader2, RotateCcw, Search, Trash, X } from "lucide-react";
 
@@ -59,6 +61,8 @@ export default function Home() {
   const [toast, setToast] = useState<{ message: string; action?: () => void } | null>(null);
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
+  const [showSettings, setShowSettings] = useState(false);
+  const [appSettings, setAppSettings] = useState<AppSettings>(() => loadAppSettings());
 
   // Trash state
   const [showTrash, setShowTrash] = useState(false);
@@ -83,6 +87,10 @@ export default function Home() {
   const reloadProjects = useCallback(async () => {
     setProjects(await listProjects());
   }, []);
+
+  useEffect(() => {
+    applyThemePreference(appSettings.theme);
+  }, [appSettings.theme]);
 
   useEffect(() => {
     listProjects()
@@ -133,8 +141,20 @@ export default function Home() {
   }, []);
 
   const handleDeleteProject = useCallback((project: Project) => {
+    if (!appSettings.confirmBeforeDelete) {
+      void (async () => {
+        try {
+          await softDeleteProject(project.id);
+          setProjects((prev) => prev.filter((p) => p.id !== project.id));
+          if (selectedProject?.id === project.id) { setSelectedProject(null); setView({ kind: "grid" }); }
+          await loadTrash();
+          await refreshCanvases(undefined);
+        } catch (err) { console.error(err); }
+      })();
+      return;
+    }
     setPendingDelete({ kind: "project", item: project });
-  }, []);
+  }, [appSettings.confirmBeforeDelete, loadTrash, refreshCanvases, selectedProject]);
 
   const confirmDeleteProject = useCallback(async (project: Project) => {
     setPendingDelete(null);
@@ -200,8 +220,21 @@ export default function Home() {
   }, [view, reloadProjects, refreshCanvases, selectedProject]);
 
   const handleDeleteCanvas = useCallback((canvas: Canvas) => {
+    if (!appSettings.confirmBeforeDelete) {
+      void (async () => {
+        try {
+          await softDeleteCanvas(canvas.id);
+          setCanvases((prev) => prev.filter((c) => c.id !== canvas.id));
+          if (view.kind === "editor" && view.canvas.id === canvas.id) setView({ kind: "grid" });
+          await loadTrash();
+          await reloadProjects();
+          await refreshCanvases(selectedProject?.id);
+        } catch (err) { console.error(err); }
+      })();
+      return;
+    }
     setPendingDelete({ kind: "canvas", item: canvas });
-  }, []);
+  }, [appSettings.confirmBeforeDelete, loadTrash, refreshCanvases, reloadProjects, selectedProject, view]);
 
   const confirmDeleteCanvas = useCallback(async (canvas: Canvas) => {
     setPendingDelete(null);
@@ -267,6 +300,13 @@ export default function Home() {
     }
   }, [loadTrash, refreshCanvases, reloadProjects, selectedProject]);
 
+  const handleSaveSettings = useCallback((settings: AppSettings) => {
+    setAppSettings(settings);
+    saveAppSettings(settings);
+    setShowSettings(false);
+    setToast({ message: "Settings saved." });
+  }, []);
+
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -279,7 +319,7 @@ export default function Home() {
       if (meta && e.key.toLowerCase() === "n" && view.kind === "grid" && !showTrash) {
         e.preventDefault();
         if (selectedProject) {
-          handleCreateCanvas("Untitled Canvas", "excalidraw");
+          handleCreateCanvas("Untitled Canvas", appSettings.defaultCanvasType);
         } else {
           handleCreateProject("Untitled Project");
         }
@@ -292,7 +332,7 @@ export default function Home() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [view, pendingDelete, showTrash, showGlobalSearch, selectedProject, handleCreateCanvas, handleCreateProject]);
+  }, [view, pendingDelete, showTrash, showGlobalSearch, selectedProject, handleCreateCanvas, handleCreateProject, appSettings.defaultCanvasType]);
 
   // ── Trash actions ─────────────────────────────────────────────────────────
   const handleRestoreProject = useCallback(async (p: Project) => {
@@ -354,6 +394,7 @@ export default function Home() {
         onDelete={handleDeleteCanvas}
         onExport={handleExportCanvas}
         onCanvasSaved={handleCanvasSaved}
+        settings={appSettings}
       />
     );
   }
@@ -370,6 +411,7 @@ export default function Home() {
         onExport={handleExportProject}
         onExportBackup={handleExportBackup}
         onImportBackup={handleImportBackup}
+        onSettings={() => setShowSettings(true)}
         onTrash={() => { loadTrash(); setShowTrash(true); }}
         trashCount={trashCount}
       />
@@ -617,6 +659,15 @@ export default function Home() {
         </div>
       )}
 
+      {showSettings && (
+        <SettingsModal
+          settings={appSettings}
+          onSave={handleSaveSettings}
+          onReset={() => handleSaveSettings(DEFAULT_APP_SETTINGS)}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
+
       {toast && (
         <div className="fixed bottom-5 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full bg-gray-900 px-4 py-2 text-sm text-white shadow-xl">
           <span>{toast.message}</span>
@@ -631,6 +682,91 @@ export default function Home() {
           <button onClick={() => setToast(null)} className="text-gray-400 hover:text-white">x</button>
         </div>
       )}
+    </div>
+  );
+}
+
+function SettingsModal({
+  settings,
+  onSave,
+  onReset,
+  onClose,
+}: {
+  settings: AppSettings;
+  onSave: (settings: AppSettings) => void;
+  onReset: () => void;
+  onClose: () => void;
+}) {
+  const [draft, setDraft] = useState(settings);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="w-[460px] max-w-[calc(100vw-2rem)] rounded-xl bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+          <h2 className="text-base font-semibold text-gray-900">Settings</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={18} /></button>
+        </div>
+        <div className="space-y-4 p-6">
+          <label className="block">
+            <span className="text-sm font-medium text-gray-700">Default canvas type</span>
+            <select
+              value={draft.defaultCanvasType}
+              onChange={(event) => setDraft({ ...draft, defaultCanvasType: event.target.value as AppSettings["defaultCanvasType"] })}
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800"
+            >
+              <option value="excalidraw">Excalidraw</option>
+              <option value="tldraw">tldraw</option>
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium text-gray-700">Auto-save debounce</span>
+            <input
+              type="number"
+              min={100}
+              step={100}
+              value={draft.autoSaveMs}
+              onChange={(event) => setDraft({ ...draft, autoSaveMs: Number(event.target.value) })}
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800"
+            />
+            <span className="mt-1 block text-xs text-gray-400">Milliseconds before editor changes are written.</span>
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium text-gray-700">Versions to keep per canvas</span>
+            <input
+              type="number"
+              min={1}
+              max={100}
+              value={draft.versionRetention}
+              onChange={(event) => setDraft({ ...draft, versionRetention: Number(event.target.value) })}
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800"
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium text-gray-700">Theme preference</span>
+            <select
+              value={draft.theme}
+              onChange={(event) => setDraft({ ...draft, theme: event.target.value as AppSettings["theme"] })}
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800"
+            >
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={draft.confirmBeforeDelete}
+              onChange={(event) => setDraft({ ...draft, confirmBeforeDelete: event.target.checked })}
+            />
+            Confirm before moving items to trash
+          </label>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => onSave(draft)} className="flex-1 rounded-lg bg-blue-600 py-2 text-sm text-white hover:bg-blue-700">Save</button>
+            <button onClick={onReset} className="flex-1 rounded-lg bg-gray-100 py-2 text-sm text-gray-600 hover:bg-gray-200">Reset</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

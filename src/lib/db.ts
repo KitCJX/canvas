@@ -156,7 +156,12 @@ export async function touchCanvasOpened(id: string): Promise<void> {
   await db.execute("UPDATE Canvas SET openedAt = ? WHERE id = ?", [new Date().toISOString(), id]);
 }
 
-export async function saveCanvasData(id: string, data: string, thumbnail?: string | null): Promise<void> {
+export async function saveCanvasData(
+  id: string,
+  data: string,
+  thumbnail?: string | null,
+  maxVersions = 20
+): Promise<void> {
   const db = await getDb();
   const updatedAt = new Date().toISOString();
   await db.execute(
@@ -171,9 +176,9 @@ export async function saveCanvasData(id: string, data: string, thumbnail?: strin
     `DELETE FROM CanvasVersion
      WHERE canvasId = ?
        AND id NOT IN (
-         SELECT id FROM CanvasVersion WHERE canvasId = ? ORDER BY createdAt DESC LIMIT 20
+         SELECT id FROM CanvasVersion WHERE canvasId = ? ORDER BY createdAt DESC LIMIT ?
        )`,
-    [id, id]
+    [id, id, maxVersions]
   );
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Download, Plus, Trash2, FolderOpen, Folder, Search, Trash, Upload } from "lucide-react";
+import { Download, Plus, Trash2, FolderOpen, Folder, Search, Settings, Trash, Upload } from "lucide-react";
 import type { Project } from "@/lib/types";
 
 interface Props {
@@ -14,6 +14,7 @@ interface Props {
   onExport: (project: Project) => void;
   onExportBackup: () => void;
   onImportBackup: (file: File) => void;
+  onSettings: () => void;
   onTrash: () => void;
   trashCount: number;
 }
@@ -28,6 +29,7 @@ export default function Sidebar({
   onExport,
   onExportBackup,
   onImportBackup,
+  onSettings,
   onTrash,
   trashCount,
 }: Props) {
@@ -241,6 +243,12 @@ export default function Sidebar({
             }}
           />
         </div>
+        <button
+          onClick={onSettings}
+          className="mb-2 flex w-full items-center gap-2 rounded bg-white px-2 py-1.5 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+        >
+          <Settings size={13} /> Settings
+        </button>
         <button
           onClick={onTrash}
           className="flex items-center gap-2 w-full text-xs text-gray-400 hover:text-gray-700 transition-colors py-1"

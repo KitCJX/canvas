@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { ArrowLeft, CheckCircle, Copy, Download, History, Loader2, MoreHorizontal, PenLine, Trash2, XCircle } from "lucide-react";
 import { listCanvasVersions, restoreCanvasVersion } from "@/lib/db";
 import type { Canvas, CanvasVersion } from "@/lib/types";
+import type { AppSettings } from "@/lib/settings";
 
 const ExcalidrawEditor = dynamic(
   () => import("./editors/ExcalidrawEditor"),
@@ -42,6 +43,7 @@ interface Props {
   onDelete: (canvas: Canvas) => void;
   onExport: (canvas: Canvas) => void;
   onCanvasSaved: (canvas: Canvas) => void;
+  settings: AppSettings;
 }
 
 export default function CanvasEditor({
@@ -53,6 +55,7 @@ export default function CanvasEditor({
   onDelete,
   onExport,
   onCanvasSaved,
+  settings,
 }: Props) {
   const [activeCanvas, setActiveCanvas] = useState(canvas);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
@@ -205,9 +208,25 @@ export default function CanvasEditor({
       {/* Editor */}
       <div className="relative flex-1 overflow-hidden">
         {activeCanvas.type === "excalidraw" ? (
-          <ExcalidrawEditor key={reloadKey} canvas={activeCanvas} onSaveStatus={markStatus} onSaved={handleSaved} saveSignal={saveSignal} />
+          <ExcalidrawEditor
+            key={reloadKey}
+            canvas={activeCanvas}
+            onSaveStatus={markStatus}
+            onSaved={handleSaved}
+            saveSignal={saveSignal}
+            autoSaveMs={settings.autoSaveMs}
+            versionRetention={settings.versionRetention}
+          />
         ) : (
-          <TldrawEditor key={reloadKey} canvas={activeCanvas} onSaveStatus={markStatus} onSaved={handleSaved} saveSignal={saveSignal} />
+          <TldrawEditor
+            key={reloadKey}
+            canvas={activeCanvas}
+            onSaveStatus={markStatus}
+            onSaved={handleSaved}
+            saveSignal={saveSignal}
+            autoSaveMs={settings.autoSaveMs}
+            versionRetention={settings.versionRetention}
+          />
         )}
       </div>
 

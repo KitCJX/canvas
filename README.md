@@ -21,6 +21,7 @@ Built with Next.js (static export) + Tauri v2.
 - **Undo delete** — moving a project or canvas to trash shows an undo toast
 - **Canvas operations** — duplicate a canvas including its data, move it to a different project, export one canvas, or export one project
 - **Backup import/export** — export all projects/canvases as JSON and import that backup later
+- **Settings** — configure default canvas type, auto-save timing, version retention, delete confirmations, and theme preference
 - **Recency sorting** — canvases are ordered by last-opened time so the most recent work surfaces first
 - **Keyboard shortcuts** — `Cmd/Ctrl+N`, `Cmd/Ctrl+K`, `Cmd/Ctrl+S`, and `Escape`
 
