@@ -2,41 +2,39 @@
 
 // This file is only ever loaded via dynamic(..., { ssr: false })
 // so browser-only imports are safe here.
-import { useRef, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Excalidraw } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import debounce from "lodash.debounce";
-import { saveCanvasData } from "@/lib/db";
+import { createCanvasThumbnail, saveCanvasData } from "@/lib/db";
 import type { Canvas } from "@/lib/types";
 // Type-only imports via the package's wildcard export
-import type { AppState, BinaryFiles } from "@excalidraw/excalidraw/types";
+import type { AppState } from "@excalidraw/excalidraw/types";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type OrderedExcalidrawElement = any;
 
 interface Props {
   canvas: Canvas;
-  onSaved?: () => void;
+  onSaveStatus?: (status: "dirty" | "saving" | "saved" | "error") => void;
+  onSaved?: (data: string, thumbnail: string) => void;
+  saveSignal?: number;
 }
 
-export default function ExcalidrawEditor({ canvas, onSaved }: Props) {
-  const initialData = useRef(
-    canvas.data
-      ? (() => {
-          try {
-            return JSON.parse(canvas.data!);
-          } catch {
-            return undefined;
-          }
-        })()
-      : undefined
-  ).current;
+export default function ExcalidrawEditor({ canvas, onSaveStatus, onSaved, saveSignal = 0 }: Props) {
+  const [initialData] = useState(() => {
+    if (!canvas.data) return undefined;
+    try {
+      return JSON.parse(canvas.data);
+    } catch {
+      return undefined;
+    }
+  });
 
-  const debouncedSave = useRef(
+  const [debouncedSave] = useState(() =>
     debounce(
       async (
         elements: readonly OrderedExcalidrawElement[],
-        appState: AppState,
-        _files: BinaryFiles
+        appState: AppState
       ) => {
         try {
           const data = JSON.stringify({
@@ -47,25 +45,32 @@ export default function ExcalidrawEditor({ canvas, onSaved }: Props) {
               theme: appState.theme,
             },
           });
-          await saveCanvasData(canvas.id, data);
-          onSaved?.();
+          const thumbnail = createCanvasThumbnail(canvas.name, canvas.type, data);
+          onSaveStatus?.("saving");
+          await saveCanvasData(canvas.id, data, thumbnail);
+          onSaved?.(data, thumbnail);
+          onSaveStatus?.("saved");
         } catch (err) {
           console.error("Excalidraw save failed:", err);
+          onSaveStatus?.("error");
         }
       },
       500
     )
-  ).current;
+  );
+
+  useEffect(() => () => { debouncedSave.flush(); }, [debouncedSave]);
+  useEffect(() => { if (saveSignal > 0) debouncedSave.flush(); }, [debouncedSave, saveSignal]);
 
   const handleChange = useCallback(
     (
       elements: readonly OrderedExcalidrawElement[],
-      appState: AppState,
-      files: BinaryFiles
+      appState: AppState
     ) => {
-      debouncedSave(elements, appState, files);
+      onSaveStatus?.("dirty");
+      debouncedSave(elements, appState);
     },
-    [debouncedSave]
+    [debouncedSave, onSaveStatus]
   );
 
   return (

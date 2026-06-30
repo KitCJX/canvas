@@ -8,6 +8,8 @@ import {
   listProjects,
   listTrashedProjects,
   listTrashedCanvases,
+  listAllCanvases,
+  listRecentCanvases,
   createProject,
   renameProject,
   softDeleteProject,
@@ -22,9 +24,11 @@ import {
   restoreCanvas,
   permanentDeleteCanvas,
   touchCanvasOpened,
+  exportBackup,
+  importBackup,
 } from "@/lib/db";
 import type { Project, Canvas } from "@/lib/types";
-import { Loader2, Trash, RotateCcw, X } from "lucide-react";
+import { Loader2, RotateCcw, Search, Trash, X } from "lucide-react";
 
 type View = { kind: "grid" } | { kind: "editor"; canvas: Canvas };
 
@@ -32,14 +36,29 @@ type PendingDelete =
   | { kind: "project"; item: Project }
   | { kind: "canvas"; item: Canvas };
 
+function downloadJson(filename: string, data: unknown) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function Home() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [canvases, setCanvases] = useState<Canvas[]>([]);
+  const [allCanvases, setAllCanvases] = useState<Canvas[]>([]);
+  const [recentCanvases, setRecentCanvases] = useState<Canvas[]>([]);
   const [view, setView] = useState<View>({ kind: "grid" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+  const [toast, setToast] = useState<{ message: string; action?: () => void } | null>(null);
+  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
+  const [globalSearch, setGlobalSearch] = useState("");
 
   // Trash state
   const [showTrash, setShowTrash] = useState(false);
@@ -54,6 +73,17 @@ export default function Home() {
     setTrashCount(tp.length + tc.length);
   }, []);
 
+  const refreshCanvases = useCallback(async (projectId = selectedProject?.id) => {
+    const [all, recent] = await Promise.all([listAllCanvases(), listRecentCanvases()]);
+    setAllCanvases(all);
+    setRecentCanvases(recent);
+    if (projectId) setCanvases(await listCanvases(projectId));
+  }, [selectedProject]);
+
+  const reloadProjects = useCallback(async () => {
+    setProjects(await listProjects());
+  }, []);
+
   useEffect(() => {
     listProjects()
       .then((ps) => { setProjects(ps); setLoading(false); })
@@ -62,31 +92,21 @@ export default function Home() {
         setError("Could not connect to the local database. Are you running inside Tauri?");
         setLoading(false);
       });
-    loadTrash();
-  }, [loadTrash]);
+    Promise.all([listTrashedProjects(), listTrashedCanvases(), listAllCanvases(), listRecentCanvases()])
+      .then(([tp, tc, all, recent]) => {
+        setTrashedProjects(tp);
+        setTrashedCanvases(tc);
+        setTrashCount(tp.length + tc.length);
+        setAllCanvases(all);
+        setRecentCanvases(recent);
+      })
+      .catch(console.error);
+  }, []);
 
   useEffect(() => {
-    if (!selectedProject) { setCanvases([]); return; }
+    if (!selectedProject) return;
     listCanvases(selectedProject.id).then(setCanvases).catch(console.error);
   }, [selectedProject]);
-
-  // ── Keyboard shortcuts ────────────────────────────────────────────────────
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      const meta = e.metaKey || e.ctrlKey;
-      if (meta && e.key === "n" && view.kind === "grid" && !showTrash) {
-        e.preventDefault();
-        // Open new project if no project selected, otherwise focus is in CanvasGrid
-      }
-      if (e.key === "Escape") {
-        if (pendingDelete) { setPendingDelete(null); return; }
-        if (showTrash) { setShowTrash(false); return; }
-        if (view.kind === "editor") { setView({ kind: "grid" }); return; }
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [view, pendingDelete, showTrash]);
 
   // ── Projects ──────────────────────────────────────────────────────────────
   const handleCreateProject = useCallback(async (name: string) => {
@@ -95,8 +115,9 @@ export default function Home() {
       setProjects((prev) => [p, ...prev]);
       setSelectedProject(p);
       setView({ kind: "grid" });
+      await refreshCanvases(p.id);
     } catch (err) { console.error(err); }
-  }, []);
+  }, [refreshCanvases]);
 
   const handleRenameProject = useCallback(async (project: Project, name: string) => {
     try {
@@ -122,8 +143,20 @@ export default function Home() {
       setProjects((prev) => prev.filter((p) => p.id !== project.id));
       if (selectedProject?.id === project.id) { setSelectedProject(null); setView({ kind: "grid" }); }
       await loadTrash();
+      await refreshCanvases(undefined);
+      setToast({
+        message: "Project moved to trash.",
+        action: () => {
+          void (async () => {
+            await restoreProject(project.id);
+            await reloadProjects();
+            await refreshCanvases(undefined);
+            await loadTrash();
+          })();
+        },
+      });
     } catch (err) { console.error(err); }
-  }, [selectedProject, loadTrash]);
+  }, [selectedProject, loadTrash, refreshCanvases, reloadProjects]);
 
   // ── Canvases ──────────────────────────────────────────────────────────────
   const handleCreateCanvas = useCallback(async (name: string, type: "excalidraw" | "tldraw") => {
@@ -131,31 +164,40 @@ export default function Home() {
     try {
       const c = await createCanvas(selectedProject.id, name, type);
       setCanvases((prev) => [c, ...prev]);
+      await reloadProjects();
+      await refreshCanvases(selectedProject.id);
       setView({ kind: "editor", canvas: c });
     } catch (err) { console.error(err); }
-  }, [selectedProject]);
+  }, [selectedProject, reloadProjects, refreshCanvases]);
 
   const handleRenameCanvas = useCallback(async (canvas: Canvas, name: string) => {
     try {
       await renameCanvas(canvas.id, name);
       setCanvases((prev) => prev.map((c) => c.id === canvas.id ? { ...c, name } : c));
+      setAllCanvases((prev) => prev.map((c) => c.id === canvas.id ? { ...c, name } : c));
+      setRecentCanvases((prev) => prev.map((c) => c.id === canvas.id ? { ...c, name } : c));
+      if (view.kind === "editor" && view.canvas.id === canvas.id) setView({ kind: "editor", canvas: { ...view.canvas, name } });
     } catch (err) { console.error(err); }
-  }, []);
+  }, [view]);
 
   const handleDuplicateCanvas = useCallback(async (canvas: Canvas) => {
     try {
       const copy = await duplicateCanvas(canvas);
       setCanvases((prev) => [copy, ...prev]);
+      await reloadProjects();
+      await refreshCanvases(selectedProject?.id);
     } catch (err) { console.error(err); }
-  }, []);
+  }, [reloadProjects, refreshCanvases, selectedProject]);
 
   const handleMoveCanvas = useCallback(async (canvas: Canvas, targetProjectId: string) => {
     try {
       await moveCanvas(canvas.id, targetProjectId);
       setCanvases((prev) => prev.filter((c) => c.id !== canvas.id));
+      await reloadProjects();
+      await refreshCanvases(selectedProject?.id);
       if (view.kind === "editor" && view.canvas.id === canvas.id) setView({ kind: "grid" });
     } catch (err) { console.error(err); }
-  }, [view]);
+  }, [view, reloadProjects, refreshCanvases, selectedProject]);
 
   const handleDeleteCanvas = useCallback((canvas: Canvas) => {
     setPendingDelete({ kind: "canvas", item: canvas });
@@ -168,24 +210,99 @@ export default function Home() {
       setCanvases((prev) => prev.filter((c) => c.id !== canvas.id));
       if (view.kind === "editor" && view.canvas.id === canvas.id) setView({ kind: "grid" });
       await loadTrash();
+      await reloadProjects();
+      await refreshCanvases(selectedProject?.id);
+      setToast({
+        message: "Canvas moved to trash.",
+        action: () => {
+          void (async () => {
+            await restoreCanvas(canvas.id);
+            await reloadProjects();
+            await refreshCanvases(selectedProject?.id);
+            await loadTrash();
+          })();
+        },
+      });
     } catch (err) { console.error(err); }
-  }, [view, loadTrash]);
+  }, [view, loadTrash, reloadProjects, refreshCanvases, selectedProject]);
 
   const handleOpenCanvas = useCallback((canvas: Canvas) => {
     touchCanvasOpened(canvas.id).catch(console.error);
     setView({ kind: "editor", canvas });
-  }, []);
+    refreshCanvases(canvas.projectId).catch(console.error);
+  }, [refreshCanvases]);
 
   const handleBack = useCallback(() => setView({ kind: "grid" }), []);
+
+  const handleCanvasSaved = useCallback((canvas: Canvas) => {
+    setCanvases((prev) => prev.map((c) => c.id === canvas.id ? canvas : c));
+    setAllCanvases((prev) => prev.map((c) => c.id === canvas.id ? { ...c, ...canvas } : c));
+    setRecentCanvases((prev) => prev.map((c) => c.id === canvas.id ? { ...c, ...canvas } : c));
+    if (view.kind === "editor" && view.canvas.id === canvas.id) setView({ kind: "editor", canvas });
+  }, [view]);
+
+  const handleExportCanvas = useCallback((canvas: Canvas) => {
+    downloadJson(`${canvas.name.replaceAll("/", "-")}.canvas.json`, canvas);
+  }, []);
+
+  const handleExportProject = useCallback(async (project: Project) => {
+    const projectCanvases = allCanvases.filter((canvas) => canvas.projectId === project.id);
+    downloadJson(`${project.name.replaceAll("/", "-")}.project.json`, { version: 1, project, canvases: projectCanvases });
+  }, [allCanvases]);
+
+  const handleExportBackup = useCallback(async () => {
+    downloadJson(`canvas-manager-backup-${new Date().toISOString().slice(0, 10)}.json`, await exportBackup());
+  }, []);
+
+  const handleImportBackup = useCallback(async (file: File) => {
+    try {
+      await importBackup(JSON.parse(await file.text()));
+      await reloadProjects();
+      await refreshCanvases(selectedProject?.id);
+      await loadTrash();
+      setToast({ message: "Backup imported." });
+    } catch (err) {
+      console.error(err);
+      setToast({ message: "Import failed. Check the backup file." });
+    }
+  }, [loadTrash, refreshCanvases, reloadProjects, selectedProject]);
+
+  // ── Keyboard shortcuts ────────────────────────────────────────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const meta = e.metaKey || e.ctrlKey;
+      if (meta && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setShowGlobalSearch(true);
+        return;
+      }
+      if (meta && e.key.toLowerCase() === "n" && view.kind === "grid" && !showTrash) {
+        e.preventDefault();
+        if (selectedProject) {
+          handleCreateCanvas("Untitled Canvas", "excalidraw");
+        } else {
+          handleCreateProject("Untitled Project");
+        }
+      }
+      if (e.key === "Escape") {
+        if (pendingDelete) { setPendingDelete(null); return; }
+        if (showGlobalSearch) { setShowGlobalSearch(false); return; }
+        if (showTrash) { setShowTrash(false); return; }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [view, pendingDelete, showTrash, showGlobalSearch, selectedProject, handleCreateCanvas, handleCreateProject]);
 
   // ── Trash actions ─────────────────────────────────────────────────────────
   const handleRestoreProject = useCallback(async (p: Project) => {
     try {
       await restoreProject(p.id);
-      setProjects((prev) => [{ ...p, deletedAt: null }, ...prev]);
+      await reloadProjects();
+      await refreshCanvases(selectedProject?.id);
       await loadTrash();
     } catch (err) { console.error(err); }
-  }, [loadTrash]);
+  }, [loadTrash, refreshCanvases, reloadProjects, selectedProject]);
 
   const handleRestoreCanvas = useCallback(async (c: Canvas) => {
     try {
@@ -193,9 +310,11 @@ export default function Home() {
       if (selectedProject?.id === c.projectId) {
         setCanvases((prev) => [{ ...c, deletedAt: null }, ...prev]);
       }
+      await reloadProjects();
+      await refreshCanvases(selectedProject?.id);
       await loadTrash();
     } catch (err) { console.error(err); }
-  }, [selectedProject, loadTrash]);
+  }, [selectedProject, loadTrash, refreshCanvases, reloadProjects]);
 
   const handlePermanentDeleteProject = useCallback(async (p: Project) => {
     try {
@@ -211,13 +330,30 @@ export default function Home() {
     } catch (err) { console.error(err); }
   }, [loadTrash]);
 
+  const globalResults = globalSearch.trim()
+    ? allCanvases.filter((canvas) => {
+        const query = globalSearch.trim().toLowerCase();
+        return (
+          canvas.name.toLowerCase().includes(query) ||
+          canvas.projectName?.toLowerCase().includes(query) ||
+          canvas.type.includes(query)
+        );
+      })
+    : recentCanvases;
+
   // ── Full-screen editor ────────────────────────────────────────────────────
   if (view.kind === "editor") {
     return (
       <CanvasEditor
+        key={view.canvas.id}
         canvas={view.canvas}
         projectName={selectedProject?.name ?? ""}
         onBack={handleBack}
+        onRename={handleRenameCanvas}
+        onDuplicate={handleDuplicateCanvas}
+        onDelete={handleDeleteCanvas}
+        onExport={handleExportCanvas}
+        onCanvasSaved={handleCanvasSaved}
       />
     );
   }
@@ -231,6 +367,9 @@ export default function Home() {
         onCreate={handleCreateProject}
         onDelete={handleDeleteProject}
         onRename={handleRenameProject}
+        onExport={handleExportProject}
+        onExportBackup={handleExportBackup}
+        onImportBackup={handleImportBackup}
         onTrash={() => { loadTrash(); setShowTrash(true); }}
         trashCount={trashCount}
       />
@@ -249,8 +388,52 @@ export default function Home() {
             </div>
           </div>
         ) : !selectedProject ? (
-          <div className="flex items-center justify-center flex-1 text-gray-400">
-            <p className="text-sm">Select or create a project to get started.</p>
+          <div className="flex-1 overflow-y-auto p-8">
+            <div className="mx-auto max-w-5xl">
+              <div className="mb-8 flex items-center justify-between">
+                <div>
+                  <h1 className="text-2xl font-semibold text-gray-900">Canvas Manager</h1>
+                  <p className="mt-1 text-sm text-gray-400">Open recent work, search everything, or create a project.</p>
+                </div>
+                <button
+                  onClick={() => setShowGlobalSearch(true)}
+                  className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-500 hover:bg-gray-50 hover:text-gray-800"
+                >
+                  <Search size={15} /> Search all <span className="text-xs text-gray-300">⌘K</span>
+                </button>
+              </div>
+              {recentCanvases.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-gray-200 py-16 text-center text-gray-400">
+                  <p className="text-sm">Select or create a project to get started.</p>
+                </div>
+              ) : (
+                <div>
+                  <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-400">Recent canvases</h2>
+                  <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+                    {recentCanvases.map((canvas) => (
+                      <button
+                        key={canvas.id}
+                        onClick={() => {
+                          const project = projects.find((p) => p.id === canvas.projectId) ?? null;
+                          setSelectedProject(project);
+                          handleOpenCanvas(canvas);
+                        }}
+                        className="rounded-xl border border-gray-200 bg-white p-3 text-left transition-all hover:-translate-y-0.5 hover:shadow-md"
+                      >
+                        <div className="mb-3 aspect-video overflow-hidden rounded-lg bg-gray-50">
+                          {canvas.thumbnail ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={canvas.thumbnail} alt="" className="h-full w-full object-cover" />
+                          ) : null}
+                        </div>
+                        <p className="truncate text-sm font-medium text-gray-800">{canvas.name}</p>
+                        <p className="truncate text-xs text-gray-400">{canvas.projectName ?? "Project"}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           <CanvasGrid
@@ -263,6 +446,7 @@ export default function Home() {
             onRename={handleRenameCanvas}
             onDuplicate={handleDuplicateCanvas}
             onMove={handleMoveCanvas}
+            onExport={handleExportCanvas}
           />
         )}
       </main>
@@ -384,6 +568,67 @@ export default function Home() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {showGlobalSearch && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-20">
+          <div className="w-[640px] max-w-[calc(100vw-2rem)] rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center gap-3 border-b border-gray-200 px-4 py-3">
+              <Search size={18} className="text-gray-400" />
+              <input
+                autoFocus
+                value={globalSearch}
+                onChange={(event) => setGlobalSearch(event.target.value)}
+                placeholder="Search canvases, projects, or type..."
+                className="flex-1 bg-transparent text-sm text-gray-800 outline-none placeholder:text-gray-400"
+              />
+              <button onClick={() => setShowGlobalSearch(false)} className="text-gray-400 hover:text-gray-700"><X size={18} /></button>
+            </div>
+            <div className="max-h-[50vh] overflow-y-auto p-2">
+              {globalResults.length === 0 ? (
+                <p className="py-10 text-center text-sm text-gray-400">No canvases found.</p>
+              ) : globalResults.map((canvas) => (
+                <button
+                  key={canvas.id}
+                  onClick={() => {
+                    const project = projects.find((p) => p.id === canvas.projectId) ?? null;
+                    setSelectedProject(project);
+                    handleOpenCanvas(canvas);
+                    setShowGlobalSearch(false);
+                    setGlobalSearch("");
+                  }}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-gray-50"
+                >
+                  <div className="h-12 w-20 overflow-hidden rounded bg-gray-100">
+                    {canvas.thumbnail ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={canvas.thumbnail} alt="" className="h-full w-full object-cover" />
+                    ) : null}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-gray-800">{canvas.name}</p>
+                    <p className="truncate text-xs text-gray-400">{canvas.projectName ?? "Project"} - {canvas.type}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className="fixed bottom-5 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full bg-gray-900 px-4 py-2 text-sm text-white shadow-xl">
+          <span>{toast.message}</span>
+          {toast.action && (
+            <button
+              onClick={() => { toast.action?.(); setToast(null); }}
+              className="font-medium text-blue-200 hover:text-white"
+            >
+              Undo
+            </button>
+          )}
+          <button onClick={() => setToast(null)} className="text-gray-400 hover:text-white">x</button>
         </div>
       )}
     </div>

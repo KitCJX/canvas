@@ -35,6 +35,23 @@ pub fn run() {
             ",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "add_canvas_thumbnails_and_versions",
+            sql: "
+                ALTER TABLE Canvas ADD COLUMN thumbnail TEXT;
+
+                CREATE TABLE IF NOT EXISTS CanvasVersion (
+                    id TEXT PRIMARY KEY,
+                    canvasId TEXT NOT NULL,
+                    data TEXT NOT NULL,
+                    thumbnail TEXT,
+                    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (canvasId) REFERENCES Canvas(id) ON DELETE CASCADE
+                );
+            ",
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

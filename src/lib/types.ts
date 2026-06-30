@@ -3,6 +3,7 @@ export interface Project {
   name: string;
   createdAt: string;
   deletedAt: string | null;
+  canvasCount?: number;
 }
 
 export interface Canvas {
@@ -11,7 +12,24 @@ export interface Canvas {
   name: string;
   type: "excalidraw" | "tldraw";
   data: string | null;
+  thumbnail: string | null;
   updatedAt: string;
   openedAt: string | null;
   deletedAt: string | null;
+  projectName?: string;
+}
+
+export interface CanvasVersion {
+  id: string;
+  canvasId: string;
+  data: string;
+  thumbnail: string | null;
+  createdAt: string;
+}
+
+export interface BackupData {
+  version: 1;
+  exportedAt: string;
+  projects: Project[];
+  canvases: Canvas[];
 }

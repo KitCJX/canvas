@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Plus, Trash2, PenLine, Pencil, Search, Copy, MoveRight } from "lucide-react";
+import { Download, Trash2, PenLine, Pencil, Search, Copy, MoveRight } from "lucide-react";
 import type { Canvas, Project } from "@/lib/types";
 
 interface Props {
@@ -14,6 +14,7 @@ interface Props {
   onRename: (canvas: Canvas, name: string) => void;
   onDuplicate: (canvas: Canvas) => void;
   onMove: (canvas: Canvas, targetProjectId: string) => void;
+  onExport: (canvas: Canvas) => void;
 }
 
 const EXCALIDRAW_COLOR = "bg-violet-50 border-violet-200 hover:border-violet-400";
@@ -29,6 +30,7 @@ export default function CanvasGrid({
   onRename,
   onDuplicate,
   onMove,
+  onExport,
 }: Props) {
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState<"excalidraw" | "tldraw">("excalidraw");
@@ -37,6 +39,7 @@ export default function CanvasGrid({
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [movingCanvas, setMovingCanvas] = useState<Canvas | null>(null);
+  const [menu, setMenu] = useState<{ canvas: Canvas; x: number; y: number } | null>(null);
   const renameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -81,6 +84,17 @@ export default function CanvasGrid({
   };
 
   const otherProjects = allProjects.filter((p) => p.id !== project.id);
+
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    window.addEventListener("click", close);
+    window.addEventListener("keydown", close);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("keydown", close);
+    };
+  }, [menu]);
 
   const filtered = search.trim()
     ? canvases.filter((c) =>
@@ -128,7 +142,7 @@ export default function CanvasGrid({
           <div className="flex flex-col items-center justify-center h-64 text-gray-400">
             <PenLine size={40} className="mb-3 opacity-30" />
             {search ? (
-              <p className="text-sm">No canvases match "{search}".</p>
+              <p className="text-sm">No canvases match &quot;{search}&quot;.</p>
             ) : (
               <>
                 <p className="text-sm">No canvases yet.</p>
@@ -147,16 +161,23 @@ export default function CanvasGrid({
                 onClick={() => {
                   if (renamingId !== c.id) onOpen(c);
                 }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setMenu({ canvas: c, x: e.clientX, y: e.clientY });
+                }}
                 onDoubleClick={(e) => {
                   e.stopPropagation();
                   startRename(c);
                 }}
               >
-                <div className="aspect-video rounded-lg bg-white/70 mb-3 flex items-center justify-center">
-                  {c.type === "excalidraw" ? (
-                    <PenLine size={28} className="text-violet-300" />
+                <div className="aspect-video rounded-lg bg-white/70 mb-3 overflow-hidden flex items-center justify-center">
+                  {c.thumbnail ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={c.thumbnail} alt="" className="h-full w-full object-cover" />
+                  ) : c.type === "excalidraw" ? (
+                    <PenLine size={28} className="text-violet-300" aria-hidden="true" />
                   ) : (
-                    <Pencil size={28} className="text-sky-300" />
+                    <Pencil size={28} className="text-sky-300" aria-hidden="true" />
                   )}
                 </div>
 
@@ -213,6 +234,16 @@ export default function CanvasGrid({
                     title="Duplicate canvas"
                   >
                     <Copy size={13} />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onExport(c);
+                    }}
+                    className="text-gray-300 hover:text-blue-500"
+                    title="Export canvas"
+                  >
+                    <Download size={13} />
                   </button>
                   <button
                     onClick={(e) => {
@@ -286,7 +317,7 @@ export default function CanvasGrid({
           <div className="bg-white rounded-xl shadow-xl p-6 w-80">
             <h3 className="text-base font-semibold text-gray-900 mb-1">Move canvas</h3>
             <p className="text-xs text-gray-400 mb-4">
-              "{movingCanvas.name}" → select destination project
+              &quot;{movingCanvas.name}&quot; → select destination project
             </p>
             <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
               {otherProjects.map((p) => (
@@ -309,6 +340,47 @@ export default function CanvasGrid({
               Cancel
             </button>
           </div>
+        </div>
+      )}
+
+      {menu && (
+        <div
+          className="fixed z-50 w-44 rounded-lg border border-gray-200 bg-white p-1 text-sm shadow-xl"
+          style={{ left: menu.x, top: menu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => { startRename(menu.canvas); setMenu(null); }}
+            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-gray-700 hover:bg-gray-100"
+          >
+            <PenLine size={14} /> Rename
+          </button>
+          <button
+            onClick={() => { onDuplicate(menu.canvas); setMenu(null); }}
+            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-gray-700 hover:bg-gray-100"
+          >
+            <Copy size={14} /> Duplicate
+          </button>
+          {otherProjects.length > 0 && (
+            <button
+              onClick={() => { setMovingCanvas(menu.canvas); setMenu(null); }}
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-gray-700 hover:bg-gray-100"
+            >
+              <MoveRight size={14} /> Move
+            </button>
+          )}
+          <button
+            onClick={() => { onExport(menu.canvas); setMenu(null); }}
+            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-gray-700 hover:bg-gray-100"
+          >
+            <Download size={14} /> Export JSON
+          </button>
+          <button
+            onClick={() => { onDelete(menu.canvas); setMenu(null); }}
+            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-red-600 hover:bg-red-50"
+          >
+            <Trash2 size={14} /> Move to trash
+          </button>
         </div>
       )}
     </div>
