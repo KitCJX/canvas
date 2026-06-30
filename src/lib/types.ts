@@ -33,3 +33,9 @@ export interface BackupData {
   projects: Project[];
   canvases: Canvas[];
 }
+
+export interface ProjectExportData {
+  version: 1;
+  project: Project;
+  canvases: Canvas[];
+}
