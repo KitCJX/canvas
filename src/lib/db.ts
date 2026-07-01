@@ -1,4 +1,4 @@
-import type { BackupData, Canvas, CanvasVersion, Project } from "./types";
+import type { BackupData, Canvas, CanvasVersion, Project, ProjectExportData } from "./types";
 
 let _db: import("@tauri-apps/plugin-sql").default | null = null;
 
@@ -249,6 +249,64 @@ export async function importBackup(backup: BackupData): Promise<void> {
       ]
     );
   }
+}
+
+export async function importCanvasToProject(canvas: Canvas, projectId: string): Promise<Canvas> {
+  if (!canvas.name || (canvas.type !== "excalidraw" && canvas.type !== "tldraw")) {
+    throw new Error("Unsupported canvas file");
+  }
+
+  const db = await getDb();
+  const id = crypto.randomUUID();
+  const updatedAt = new Date().toISOString();
+  const thumbnail = canvas.thumbnail ?? createCanvasThumbnail(canvas.name, canvas.type, canvas.data);
+  await db.execute(
+    `INSERT INTO Canvas (id, projectId, name, type, data, thumbnail, updatedAt, openedAt, deletedAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL)`,
+    [id, projectId, canvas.name, canvas.type, canvas.data, thumbnail, updatedAt]
+  );
+
+  return {
+    id,
+    projectId,
+    name: canvas.name,
+    type: canvas.type,
+    data: canvas.data,
+    thumbnail,
+    updatedAt,
+    openedAt: null,
+    deletedAt: null,
+  };
+}
+
+export async function importProjectExport(projectExport: ProjectExportData): Promise<Project> {
+  if (
+    projectExport.version !== 1 ||
+    !projectExport.project?.name ||
+    !Array.isArray(projectExport.canvases)
+  ) {
+    throw new Error("Unsupported project file");
+  }
+
+  const db = await getDb();
+  const projectId = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
+  await db.execute(
+    "INSERT INTO Project (id, name, createdAt, deletedAt) VALUES (?, ?, ?, NULL)",
+    [projectId, projectExport.project.name, createdAt]
+  );
+
+  for (const canvas of projectExport.canvases) {
+    await importCanvasToProject(canvas, projectId);
+  }
+
+  return {
+    id: projectId,
+    name: projectExport.project.name,
+    createdAt,
+    deletedAt: null,
+    canvasCount: projectExport.canvases.length,
+  };
 }
 
 export function createCanvasThumbnail(

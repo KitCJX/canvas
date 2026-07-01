@@ -26,8 +26,10 @@ import {
   touchCanvasOpened,
   exportBackup,
   importBackup,
+  importCanvasToProject,
+  importProjectExport,
 } from "@/lib/db";
-import type { Project, Canvas } from "@/lib/types";
+import type { BackupData, Canvas, Project, ProjectExportData } from "@/lib/types";
 import { Loader2, RotateCcw, Search, Trash, X } from "lucide-react";
 
 type View = { kind: "grid" } | { kind: "editor"; canvas: Canvas };
@@ -256,14 +258,32 @@ export default function Home() {
 
   const handleImportBackup = useCallback(async (file: File) => {
     try {
-      await importBackup(JSON.parse(await file.text()));
+      const imported = JSON.parse(await file.text()) as BackupData | ProjectExportData | Canvas;
+      let refreshProjectId = selectedProject?.id;
+      if ("projects" in imported && Array.isArray(imported.projects) && "canvases" in imported) {
+        await importBackup(imported);
+        setToast({ message: "Backup imported." });
+      } else if ("project" in imported && "canvases" in imported) {
+        const project = await importProjectExport(imported);
+        setSelectedProject(project);
+        refreshProjectId = project.id;
+        setToast({ message: "Project imported." });
+      } else if ("type" in imported && "name" in imported) {
+        if (!selectedProject) {
+          setToast({ message: "Select a project before importing a canvas." });
+          return;
+        }
+        await importCanvasToProject(imported, selectedProject.id);
+        setToast({ message: "Canvas imported." });
+      } else {
+        throw new Error("Unsupported import file");
+      }
       await reloadProjects();
-      await refreshCanvases(selectedProject?.id);
+      await refreshCanvases(refreshProjectId);
       await loadTrash();
-      setToast({ message: "Backup imported." });
     } catch (err) {
       console.error(err);
-      setToast({ message: "Import failed. Check the backup file." });
+      setToast({ message: "Import failed. Check the JSON file." });
     }
   }, [loadTrash, refreshCanvases, reloadProjects, selectedProject]);
 
