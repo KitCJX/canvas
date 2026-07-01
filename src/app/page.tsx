@@ -822,7 +822,6 @@ export default function Home() {
       )}
 
       {showDataHealth && dataHealth && (
-      {showDataHealth && dataHealth && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="w-[520px] max-w-[calc(100vw-2rem)] rounded-xl bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
