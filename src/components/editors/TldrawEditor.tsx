@@ -6,7 +6,8 @@ import { useEffect, useRef } from "react";
 import { Tldraw, getSnapshot, loadSnapshot } from "tldraw";
 import "tldraw/tldraw.css";
 import debounce from "lodash.debounce";
-import { createCanvasThumbnail, saveCanvasData } from "@/lib/db";
+import { saveCanvasData } from "@/lib/db";
+import { captureLiveThumbnail } from "@/lib/thumbnails";
 import type { Canvas } from "@/lib/types";
 import type { Editor } from "tldraw";
 
@@ -27,6 +28,7 @@ export default function TldrawEditor({
   autoSaveMs,
   versionRetention,
 }: Props) {
+  const rootRef = useRef<HTMLDivElement>(null);
   // Keep a stable ref to the debounced saver so it is created once.
   const debouncedSaveRef = useRef<ReturnType<typeof debounce> | null>(null);
 
@@ -40,10 +42,8 @@ export default function TldrawEditor({
       }
     }
 
-    const debouncedSave = debounce(async () => {
+    const debouncedSave = debounce(async (data: string, thumbnail: string) => {
       try {
-        const data = JSON.stringify(getSnapshot(editor.store));
-        const thumbnail = createCanvasThumbnail(canvas.name, canvas.type, data);
         onSaveStatus?.("saving");
         await saveCanvasData(canvas.id, data, thumbnail, versionRetention);
         onSaved?.(data, thumbnail);
@@ -57,8 +57,10 @@ export default function TldrawEditor({
     debouncedSaveRef.current = debouncedSave;
 
     const unsubscribe = editor.store.listen(() => {
+      const data = JSON.stringify(getSnapshot(editor.store));
+      const thumbnail = captureLiveThumbnail(rootRef.current, canvas.name, canvas.type, data);
       onSaveStatus?.("dirty");
-      debouncedSave();
+      debouncedSave(data, thumbnail);
     }, {
       source: "user",
       scope: "document",
@@ -76,7 +78,7 @@ export default function TldrawEditor({
   }, [saveSignal]);
 
   return (
-    <div className="absolute inset-0">
+    <div ref={rootRef} className="absolute inset-0">
       <Tldraw onMount={handleMount} />
     </div>
   );

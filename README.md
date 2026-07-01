@@ -15,7 +15,7 @@ Built with Next.js (static export) + Tauri v2.
 - **Auto-save with status** — changes are debounced and written to SQLite automatically, with `Unsaved`, `Saving`, `Saved`, and `Save failed` states
 - **Manual save flush** — `Cmd/Ctrl+S` immediately flushes pending editor changes
 - **Version history** — each successful save creates a capped local snapshot; preview, label, restore, or restore older versions as copies from the editor
-- **Thumbnail cards** — generated canvas thumbnails make grid, recent, and search views easier to scan
+- **Thumbnail cards** — live editor canvas captures make grid, recent, and search views easier to scan, with generated thumbnails as fallback
 - **Right-click workflows** — context menus for projects and canvases expose rename, duplicate, move, export, and trash actions
 - **Soft delete & Trash** — projects and canvases are moved to trash rather than deleted immediately; restore or permanently delete from the Trash panel
 - **Undo delete** — moving a project or canvas to trash shows an undo toast
