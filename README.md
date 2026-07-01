@@ -228,6 +228,17 @@ cd src-tauri && cargo test
 npm run tauri build
 ```
 
+### GitHub Releases
+
+Tagged versions trigger the release workflow and attach the macOS app/DMG artifacts to a GitHub Release.
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The workflow runs `npm run tauri build` on `macos-latest` and uploads files from `src-tauri/target/release/bundle/`.
+
 ---
 
 ## Key Design Decisions
