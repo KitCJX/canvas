@@ -15,6 +15,8 @@ interface Props {
   onExportBackup: () => void;
   onImportBackup: (file: File) => void;
   onDataHealth: () => void;
+  draggingCanvasProjectId: string | null;
+  onDropCanvas: (project: Project) => void;
   onTrash: () => void;
   trashCount: number;
 }
@@ -30,6 +32,8 @@ export default function Sidebar({
   onExportBackup,
   onImportBackup,
   onDataHealth,
+  draggingCanvasProjectId,
+  onDropCanvas,
   onTrash,
   trashCount,
 }: Props) {
@@ -156,14 +160,29 @@ export default function Sidebar({
         )}
         {filtered.map((p) => {
           const active = p.id === selectedId;
+          const canDrop = Boolean(draggingCanvasProjectId && draggingCanvasProjectId !== p.id);
           return (
             <div
               key={p.id}
               className={`group flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
+                canDrop
+                  ? "outline outline-1 -outline-offset-2 outline-blue-200"
+                  : ""
+              } ${
                 active
                   ? "bg-blue-50 text-blue-700"
                   : "text-gray-700 hover:bg-gray-100"
               }`}
+              onDragOver={(e) => {
+                if (!canDrop) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+              }}
+              onDrop={(e) => {
+                if (!canDrop) return;
+                e.preventDefault();
+                onDropCanvas(p);
+              }}
               onClick={() => {
                 if (renamingId !== p.id) onSelect(p);
               }}

@@ -15,6 +15,8 @@ interface Props {
   onDuplicate: (canvas: Canvas) => void;
   onMove: (canvas: Canvas, targetProjectId: string) => void;
   onExport: (canvas: Canvas) => void;
+  onDragStart: (canvas: Canvas) => void;
+  onDragEnd: () => void;
 }
 
 const EXCALIDRAW_COLOR = "bg-violet-50 border-violet-200 hover:border-violet-400";
@@ -31,6 +33,8 @@ export default function CanvasGrid({
   onDuplicate,
   onMove,
   onExport,
+  onDragStart,
+  onDragEnd,
 }: Props) {
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState<"excalidraw" | "tldraw">("excalidraw");
@@ -155,9 +159,16 @@ export default function CanvasGrid({
             {filtered.map((c) => (
               <div
                 key={c.id}
+                draggable={renamingId !== c.id}
                 className={`group relative border-2 rounded-xl p-4 cursor-pointer transition-all ${
                   c.type === "excalidraw" ? EXCALIDRAW_COLOR : TLDRAW_COLOR
                 }`}
+                onDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = "move";
+                  e.dataTransfer.setData("text/plain", c.id);
+                  onDragStart(c);
+                }}
+                onDragEnd={onDragEnd}
                 onClick={() => {
                   if (renamingId !== c.id) onOpen(c);
                 }}
