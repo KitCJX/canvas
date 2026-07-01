@@ -1,4 +1,4 @@
-import type { BackupData, Canvas, CanvasVersion, Project, ProjectExportData } from "./types";
+import type { BackupData, Canvas, CanvasVersion, DataHealth, Project, ProjectExportData } from "./types";
 
 let _db: import("@tauri-apps/plugin-sql").default | null = null;
 
@@ -307,6 +307,45 @@ export async function importProjectExport(projectExport: ProjectExportData): Pro
     deletedAt: null,
     canvasCount: projectExport.canvases.length,
   };
+}
+
+async function countSql(sql: string): Promise<number> {
+  const db = await getDb();
+  const rows = await db.select<Array<{ count: number }>>(sql);
+  return rows[0]?.count ?? 0;
+}
+
+export async function getDataHealth(): Promise<DataHealth> {
+  const db = await getDb();
+  const versionBytes = await db.select<Array<{ bytes: number }>>(
+    "SELECT COALESCE(SUM(LENGTH(data) + COALESCE(LENGTH(thumbnail), 0)), 0) AS bytes FROM CanvasVersion"
+  );
+
+  return {
+    databaseLocation: "~/Library/Application Support/com.canvas.manager/local-projects.db",
+    projectCount: await countSql("SELECT COUNT(*) AS count FROM Project WHERE deletedAt IS NULL"),
+    canvasCount: await countSql("SELECT COUNT(*) AS count FROM Canvas WHERE deletedAt IS NULL"),
+    trashedProjectCount: await countSql("SELECT COUNT(*) AS count FROM Project WHERE deletedAt IS NOT NULL"),
+    trashedCanvasCount: await countSql("SELECT COUNT(*) AS count FROM Canvas WHERE deletedAt IS NOT NULL"),
+    versionCount: await countSql("SELECT COUNT(*) AS count FROM CanvasVersion"),
+    versionBytes: versionBytes[0]?.bytes ?? 0,
+  };
+}
+
+export async function pruneCanvasVersions(keepPerCanvas = 10): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    `DELETE FROM CanvasVersion
+     WHERE id NOT IN (
+       SELECT id FROM (
+         SELECT id,
+                ROW_NUMBER() OVER (PARTITION BY canvasId ORDER BY createdAt DESC) AS rn
+         FROM CanvasVersion
+       ) ranked
+       WHERE rn <= ?
+     )`,
+    [keepPerCanvas]
+  );
 }
 
 export function createCanvasThumbnail(

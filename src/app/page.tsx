@@ -25,11 +25,13 @@ import {
   permanentDeleteCanvas,
   touchCanvasOpened,
   exportBackup,
+  getDataHealth,
   importBackup,
   importCanvasToProject,
   importProjectExport,
+  pruneCanvasVersions,
 } from "@/lib/db";
-import type { BackupData, Canvas, Project, ProjectExportData } from "@/lib/types";
+import type { BackupData, Canvas, DataHealth, Project, ProjectExportData } from "@/lib/types";
 import { Loader2, RotateCcw, Search, Trash, X } from "lucide-react";
 
 type View = { kind: "grid" } | { kind: "editor"; canvas: Canvas };
@@ -61,6 +63,8 @@ export default function Home() {
   const [toast, setToast] = useState<{ message: string; action?: () => void } | null>(null);
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
+  const [showDataHealth, setShowDataHealth] = useState(false);
+  const [dataHealth, setDataHealth] = useState<DataHealth | null>(null);
 
   // Trash state
   const [showTrash, setShowTrash] = useState(false);
@@ -287,6 +291,17 @@ export default function Home() {
     }
   }, [loadTrash, refreshCanvases, reloadProjects, selectedProject]);
 
+  const openDataHealth = useCallback(async () => {
+    setDataHealth(await getDataHealth());
+    setShowDataHealth(true);
+  }, []);
+
+  const handlePruneVersions = useCallback(async () => {
+    await pruneCanvasVersions(10);
+    setDataHealth(await getDataHealth());
+    setToast({ message: "Old versions pruned." });
+  }, []);
+
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -390,6 +405,7 @@ export default function Home() {
         onExport={handleExportProject}
         onExportBackup={handleExportBackup}
         onImportBackup={handleImportBackup}
+        onDataHealth={openDataHealth}
         onTrash={() => { loadTrash(); setShowTrash(true); }}
         trashCount={trashCount}
       />
@@ -637,6 +653,40 @@ export default function Home() {
         </div>
       )}
 
+      {showDataHealth && dataHealth && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-[520px] max-w-[calc(100vw-2rem)] rounded-xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+              <h2 className="text-base font-semibold text-gray-900">Data health</h2>
+              <button onClick={() => setShowDataHealth(false)} className="text-gray-400 hover:text-gray-700"><X size={18} /></button>
+            </div>
+            <div className="space-y-4 p-6">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Database</p>
+                <p className="mt-1 break-all rounded bg-gray-50 px-3 py-2 text-xs text-gray-600">{dataHealth.databaseLocation}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <HealthStat label="Active projects" value={dataHealth.projectCount} />
+                <HealthStat label="Active canvases" value={dataHealth.canvasCount} />
+                <HealthStat label="Trashed projects" value={dataHealth.trashedProjectCount} />
+                <HealthStat label="Trashed canvases" value={dataHealth.trashedCanvasCount} />
+                <HealthStat label="Saved versions" value={dataHealth.versionCount} />
+                <HealthStat label="Version storage" value={`${Math.round(dataHealth.versionBytes / 1024)} KB`} />
+              </div>
+              <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                Backup reminder: export a full backup after major work or before pruning version history.
+              </div>
+              <button
+                onClick={handlePruneVersions}
+                className="w-full rounded-lg bg-gray-900 py-2 text-sm text-white hover:bg-gray-800"
+              >
+                Prune old versions, keep latest 10 per canvas
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {toast && (
         <div className="fixed bottom-5 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full bg-gray-900 px-4 py-2 text-sm text-white shadow-xl">
           <span>{toast.message}</span>
@@ -651,6 +701,15 @@ export default function Home() {
           <button onClick={() => setToast(null)} className="text-gray-400 hover:text-white">x</button>
         </div>
       )}
+    </div>
+  );
+}
+
+function HealthStat({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="rounded-lg border border-gray-200 p-3">
+      <p className="text-xs text-gray-400">{label}</p>
+      <p className="mt-1 text-lg font-semibold text-gray-900">{value}</p>
     </div>
   );
 }
