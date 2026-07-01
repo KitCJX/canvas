@@ -11,10 +11,12 @@ interface Props {
   onCreate: (name: string, type: "excalidraw" | "tldraw") => void;
   onOpen: (canvas: Canvas) => void;
   onDelete: (canvas: Canvas) => void;
+  onDeleteMany: (canvases: Canvas[]) => void;
   onRename: (canvas: Canvas, name: string) => void;
   onDuplicate: (canvas: Canvas) => void;
   onMove: (canvas: Canvas, targetProjectId: string) => void;
   onExport: (canvas: Canvas) => void;
+  onExportMany: (canvases: Canvas[]) => void;
   onDragStart: (canvas: Canvas) => void;
   onDragEnd: () => void;
 }
@@ -29,10 +31,12 @@ export default function CanvasGrid({
   onCreate,
   onOpen,
   onDelete,
+  onDeleteMany,
   onRename,
   onDuplicate,
   onMove,
   onExport,
+  onExportMany,
   onDragStart,
   onDragEnd,
 }: Props) {
@@ -43,6 +47,8 @@ export default function CanvasGrid({
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [movingCanvas, setMovingCanvas] = useState<Canvas | null>(null);
+  const [movingSelection, setMovingSelection] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [menu, setMenu] = useState<{ canvas: Canvas; x: number; y: number } | null>(null);
   const renameRef = useRef<HTMLInputElement>(null);
 
@@ -105,6 +111,13 @@ export default function CanvasGrid({
         c.name.toLowerCase().includes(search.trim().toLowerCase())
       )
     : canvases;
+  const selectedCanvases = filtered.filter((canvas) => selectedIds.includes(canvas.id));
+
+  const toggleSelected = (canvas: Canvas) => {
+    setSelectedIds((prev) =>
+      prev.includes(canvas.id) ? prev.filter((id) => id !== canvas.id) : [...prev, canvas.id]
+    );
+  };
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -139,6 +152,19 @@ export default function CanvasGrid({
           </button>
         </div>
       </div>
+
+      {selectedCanvases.length > 0 && (
+        <div className="flex items-center gap-2 border-b border-blue-100 bg-blue-50 px-6 py-2 text-sm text-blue-700">
+          <span className="font-medium">{selectedCanvases.length} selected</span>
+          <button onClick={() => selectedCanvases.forEach(onDuplicate)} className="rounded bg-white px-2 py-1 text-xs hover:bg-blue-100">Duplicate</button>
+          {otherProjects.length > 0 && (
+            <button onClick={() => setMovingSelection(true)} className="rounded bg-white px-2 py-1 text-xs hover:bg-blue-100">Move</button>
+          )}
+          <button onClick={() => onExportMany(selectedCanvases)} className="rounded bg-white px-2 py-1 text-xs hover:bg-blue-100">Export</button>
+          <button onClick={() => { onDeleteMany(selectedCanvases); setSelectedIds([]); }} className="rounded bg-white px-2 py-1 text-xs text-red-600 hover:bg-red-50">Trash</button>
+          <button onClick={() => setSelectedIds([])} className="ml-auto rounded px-2 py-1 text-xs hover:bg-blue-100">Clear</button>
+        </div>
+      )}
 
       {/* Canvas grid */}
       <div className="flex-1 overflow-y-auto p-6">
@@ -191,6 +217,14 @@ export default function CanvasGrid({
                     <Pencil size={28} className="text-sky-300" aria-hidden="true" />
                   )}
                 </div>
+                <label className="absolute left-2 top-2 rounded bg-white/90 px-1.5 py-1 shadow-sm" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(c.id)}
+                    onChange={() => toggleSelected(c)}
+                    aria-label={`Select ${c.name}`}
+                  />
+                </label>
 
                 {renamingId === c.id ? (
                   <input
@@ -320,23 +354,29 @@ export default function CanvasGrid({
       )}
 
       {/* Move canvas modal */}
-      {movingCanvas && (
+      {(movingCanvas || movingSelection) && (
         <div
           className="fixed inset-0 bg-black/30 flex items-center justify-center z-50"
-          onClick={(e) => { if (e.target === e.currentTarget) setMovingCanvas(null); }}
+          onClick={(e) => { if (e.target === e.currentTarget) { setMovingCanvas(null); setMovingSelection(false); } }}
         >
           <div className="bg-white rounded-xl shadow-xl p-6 w-80">
-            <h3 className="text-base font-semibold text-gray-900 mb-1">Move canvas</h3>
+            <h3 className="text-base font-semibold text-gray-900 mb-1">{movingSelection ? "Move selected canvases" : "Move canvas"}</h3>
             <p className="text-xs text-gray-400 mb-4">
-              &quot;{movingCanvas.name}&quot; → select destination project
+              {movingSelection ? `${selectedCanvases.length} canvases` : `"${movingCanvas?.name}"`} → select destination project
             </p>
             <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
               {otherProjects.map((p) => (
                 <button
                   key={p.id}
                   onClick={() => {
-                    onMove(movingCanvas, p.id);
+                    if (movingSelection) {
+                      selectedCanvases.forEach((canvas) => onMove(canvas, p.id));
+                      setSelectedIds([]);
+                    } else if (movingCanvas) {
+                      onMove(movingCanvas, p.id);
+                    }
                     setMovingCanvas(null);
+                    setMovingSelection(false);
                   }}
                   className="text-left text-sm px-3 py-2 rounded-lg hover:bg-blue-50 text-gray-700 hover:text-blue-700 transition-colors"
                 >
@@ -345,7 +385,7 @@ export default function CanvasGrid({
               ))}
             </div>
             <button
-              onClick={() => setMovingCanvas(null)}
+              onClick={() => { setMovingCanvas(null); setMovingSelection(false); }}
               className="w-full mt-3 text-sm bg-gray-100 text-gray-600 rounded-lg py-2 hover:bg-gray-200 transition-colors"
             >
               Cancel

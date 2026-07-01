@@ -24,6 +24,7 @@ Built with Next.js (static export) + Tauri v2.
 - **Data health tools** — inspect database location, project/canvas/trash/version counts, version storage size, and prune old versions
 - **Drag-and-drop movement** — drag canvas cards onto sidebar projects to move them quickly
 - **Settings** — configure default canvas type, auto-save timing, version retention, delete confirmations, and theme preference
+- **Multi-select operations** — select multiple canvas cards and batch duplicate, move, export, or trash them
 - **Recency sorting** — canvases are ordered by last-opened time so the most recent work surfaces first
 - **Keyboard shortcuts** — `Cmd/Ctrl+N`, `Cmd/Ctrl+K`, `Cmd/Ctrl+S`, and `Escape`
 

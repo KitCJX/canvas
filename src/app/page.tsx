@@ -256,6 +256,19 @@ export default function Home() {
     setPendingDelete({ kind: "canvas", item: canvas });
   }, [appSettings.confirmBeforeDelete, loadTrash, refreshCanvases, reloadProjects, selectedProject, view]);
 
+  const handleDeleteManyCanvases = useCallback(async (items: Canvas[]) => {
+    if (items.length === 0) return;
+    if (!window.confirm(`Move ${items.length} canvases to trash?`)) return;
+    try {
+      await Promise.all(items.map((canvas) => softDeleteCanvas(canvas.id)));
+      setCanvases((prev) => prev.filter((canvas) => !items.some((item) => item.id === canvas.id)));
+      await loadTrash();
+      await reloadProjects();
+      await refreshCanvases(selectedProject?.id);
+      setToast({ message: `${items.length} canvases moved to trash.` });
+    } catch (err) { console.error(err); }
+  }, [loadTrash, refreshCanvases, reloadProjects, selectedProject]);
+
   const confirmDeleteCanvas = useCallback(async (canvas: Canvas) => {
     setPendingDelete(null);
     try {
@@ -303,6 +316,10 @@ export default function Home() {
 
   const handleExportCanvas = useCallback((canvas: Canvas) => {
     downloadJson(`${canvas.name.replaceAll("/", "-")}.canvas.json`, canvas);
+  }, []);
+
+  const handleExportManyCanvases = useCallback((items: Canvas[]) => {
+    downloadJson(`canvas-export-${new Date().toISOString().slice(0, 10)}.json`, { version: 1, canvases: items });
   }, []);
 
   const handleExportProject = useCallback(async (project: Project) => {
@@ -587,10 +604,12 @@ export default function Home() {
             onCreate={handleCreateCanvas}
             onOpen={handleOpenCanvas}
             onDelete={handleDeleteCanvas}
+            onDeleteMany={handleDeleteManyCanvases}
             onRename={handleRenameCanvas}
             onDuplicate={handleDuplicateCanvas}
             onMove={handleMoveCanvas}
             onExport={handleExportCanvas}
+            onExportMany={handleExportManyCanvases}
             onDragStart={setDraggingCanvas}
             onDragEnd={() => setDraggingCanvas(null)}
           />
