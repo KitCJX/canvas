@@ -15,9 +15,18 @@ interface Props {
   onSaveStatus?: (status: "dirty" | "saving" | "saved" | "error") => void;
   onSaved?: (data: string, thumbnail: string) => void;
   saveSignal?: number;
+  autoSaveMs: number;
+  versionRetention: number;
 }
 
-export default function TldrawEditor({ canvas, onSaveStatus, onSaved, saveSignal = 0 }: Props) {
+export default function TldrawEditor({
+  canvas,
+  onSaveStatus,
+  onSaved,
+  saveSignal = 0,
+  autoSaveMs,
+  versionRetention,
+}: Props) {
   // Keep a stable ref to the debounced saver so it is created once.
   const debouncedSaveRef = useRef<ReturnType<typeof debounce> | null>(null);
 
@@ -36,14 +45,14 @@ export default function TldrawEditor({ canvas, onSaveStatus, onSaved, saveSignal
         const data = JSON.stringify(getSnapshot(editor.store));
         const thumbnail = createCanvasThumbnail(canvas.name, canvas.type, data);
         onSaveStatus?.("saving");
-        await saveCanvasData(canvas.id, data, thumbnail);
+        await saveCanvasData(canvas.id, data, thumbnail, versionRetention);
         onSaved?.(data, thumbnail);
         onSaveStatus?.("saved");
       } catch (err) {
         console.error("tldraw save failed:", err);
         onSaveStatus?.("error");
       }
-    }, 500);
+    }, autoSaveMs);
 
     debouncedSaveRef.current = debouncedSave;
 

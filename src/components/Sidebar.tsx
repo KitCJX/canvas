@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Activity, Download, Plus, Trash2, FolderOpen, Folder, Search, Trash, Upload } from "lucide-react";
+import { Activity, Download, Plus, Trash2, FolderOpen, Folder, Search, Settings, Trash, Upload } from "lucide-react";
 import type { Project } from "@/lib/types";
 
 interface Props {
@@ -17,6 +17,7 @@ interface Props {
   onDataHealth: () => void;
   draggingCanvasProjectId: string | null;
   onDropCanvas: (project: Project) => void;
+  onSettings: () => void;
   onTrash: () => void;
   trashCount: number;
 }
@@ -34,6 +35,7 @@ export default function Sidebar({
   onDataHealth,
   draggingCanvasProjectId,
   onDropCanvas,
+  onSettings,
   onTrash,
   trashCount,
 }: Props) {
@@ -267,6 +269,12 @@ export default function Sidebar({
           className="mb-2 flex w-full items-center gap-2 rounded bg-white px-2 py-1.5 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-800"
         >
           <Activity size={13} /> Data health
+        </button>
+        <button
+          onClick={onSettings}
+          className="mb-2 flex w-full items-center gap-2 rounded bg-white px-2 py-1.5 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+        >
+          <Settings size={13} /> Settings
         </button>
         <button
           onClick={onTrash}
