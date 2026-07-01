@@ -52,6 +52,14 @@ pub fn run() {
             ",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 4,
+            description: "add_canvas_version_labels",
+            sql: "
+                ALTER TABLE CanvasVersion ADD COLUMN label TEXT;
+            ",
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

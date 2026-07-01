@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { ArrowLeft, CheckCircle, Copy, Download, History, Loader2, MoreHorizontal, PenLine, Trash2, XCircle } from "lucide-react";
-import { listCanvasVersions, restoreCanvasVersion } from "@/lib/db";
+import { labelCanvasVersion, listCanvasVersions, restoreCanvasVersion, restoreCanvasVersionAsCopy } from "@/lib/db";
 import type { Canvas, CanvasVersion } from "@/lib/types";
 import type { AppSettings } from "@/lib/settings";
 
@@ -44,6 +44,7 @@ interface Props {
   onExport: (canvas: Canvas) => void;
   onCanvasSaved: (canvas: Canvas) => void;
   settings: AppSettings;
+  onCanvasCreated: (canvas: Canvas) => void;
 }
 
 export default function CanvasEditor({
@@ -56,6 +57,7 @@ export default function CanvasEditor({
   onExport,
   onCanvasSaved,
   settings,
+  onCanvasCreated,
 }: Props) {
   const [activeCanvas, setActiveCanvas] = useState(canvas);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
@@ -124,6 +126,19 @@ export default function CanvasEditor({
     setReloadKey((value) => value + 1);
     setShowHistory(false);
     markStatus("saved");
+  };
+
+  const restoreVersionAsCopy = async (version: CanvasVersion) => {
+    const copy = await restoreCanvasVersionAsCopy(activeCanvas, version);
+    onCanvasCreated(copy);
+    setShowHistory(false);
+  };
+
+  const labelVersion = async (version: CanvasVersion) => {
+    const label = window.prompt("Version label", version.label ?? "");
+    if (label === null) return;
+    await labelCanvasVersion(version.id, label.trim() || null);
+    setVersions(await listCanvasVersions(activeCanvas.id));
   };
 
   return (
@@ -242,10 +257,20 @@ export default function CanvasEditor({
                 <p className="py-8 text-center text-sm text-gray-400">No saved versions yet.</p>
               ) : versions.map((version) => (
                 <div key={version.id} className="flex items-center gap-3 border-b border-gray-100 px-2 py-2 last:border-0">
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-700">{new Date(version.createdAt).toLocaleString()}</p>
-                    <p className="text-xs text-gray-400">{Math.max(1, Math.round(version.data.length / 1024))} KB</p>
+                  <div className="h-14 w-24 overflow-hidden rounded bg-gray-100">
+                    {version.thumbnail ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={version.thumbnail} alt="" className="h-full w-full object-cover" />
+                    ) : null}
                   </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm text-gray-700">{version.label || new Date(version.createdAt).toLocaleString()}</p>
+                    <p className="text-xs text-gray-400">
+                      {new Date(version.createdAt).toLocaleString()} - {Math.max(1, Math.round(version.data.length / 1024))} KB - {activeCanvas.type}
+                    </p>
+                  </div>
+                  <button onClick={() => labelVersion(version)} className="rounded bg-gray-100 px-2 py-1.5 text-xs text-gray-600 hover:bg-gray-200">Label</button>
+                  <button onClick={() => restoreVersionAsCopy(version)} className="rounded bg-gray-900 px-2 py-1.5 text-xs text-white hover:bg-gray-800">Copy</button>
                   <button onClick={() => restoreVersion(version)} className="rounded bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700">Restore</button>
                 </div>
               ))}
