@@ -40,6 +40,13 @@ type PendingDelete =
   | { kind: "project"; item: Project }
   | { kind: "canvas"; item: Canvas };
 
+type PaletteCommand = {
+  id: string;
+  title: string;
+  description: string;
+  action: () => void;
+};
+
 function downloadJson(filename: string, data: unknown) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -365,13 +372,55 @@ export default function Home() {
     } catch (err) { console.error(err); }
   }, [loadTrash]);
 
-  const globalResults = globalSearch.trim()
+  const paletteQuery = globalSearch.trim().toLowerCase();
+  const closePalette = () => {
+    setShowGlobalSearch(false);
+    setGlobalSearch("");
+  };
+  const commandItems: PaletteCommand[] = [
+    {
+      id: "new-project",
+      title: "Create project",
+      description: "Add a new untitled project",
+      action: () => { handleCreateProject("Untitled Project"); closePalette(); },
+    },
+    {
+      id: "new-excalidraw",
+      title: "Create Excalidraw canvas",
+      description: selectedProject ? `Add to ${selectedProject.name}` : "Select a project first",
+      action: () => { if (selectedProject) handleCreateCanvas("Untitled Canvas", "excalidraw"); closePalette(); },
+    },
+    {
+      id: "new-tldraw",
+      title: "Create tldraw canvas",
+      description: selectedProject ? `Add to ${selectedProject.name}` : "Select a project first",
+      action: () => { if (selectedProject) handleCreateCanvas("Untitled Canvas", "tldraw"); closePalette(); },
+    },
+    {
+      id: "open-trash",
+      title: "Open trash",
+      description: "Restore or permanently delete trashed items",
+      action: () => { loadTrash(); setShowTrash(true); closePalette(); },
+    },
+    {
+      id: "export-backup",
+      title: "Export full backup",
+      description: "Download all projects and canvases as JSON",
+      action: () => { handleExportBackup(); closePalette(); },
+    },
+  ].filter((command) => {
+    if (!paletteQuery) return true;
+    return `${command.title} ${command.description}`.toLowerCase().includes(paletteQuery);
+  });
+  const projectResults = paletteQuery
+    ? projects.filter((project) => project.name.toLowerCase().includes(paletteQuery))
+    : projects.slice(0, 5);
+  const globalResults = paletteQuery
     ? allCanvases.filter((canvas) => {
-        const query = globalSearch.trim().toLowerCase();
         return (
-          canvas.name.toLowerCase().includes(query) ||
-          canvas.projectName?.toLowerCase().includes(query) ||
-          canvas.type.includes(query)
+          canvas.name.toLowerCase().includes(paletteQuery) ||
+          canvas.projectName?.toLowerCase().includes(paletteQuery) ||
+          canvas.type.includes(paletteQuery)
         );
       })
     : recentCanvases;
@@ -616,23 +665,62 @@ export default function Home() {
                 autoFocus
                 value={globalSearch}
                 onChange={(event) => setGlobalSearch(event.target.value)}
-                placeholder="Search canvases, projects, or type..."
+                placeholder="Search or run a command..."
                 className="flex-1 bg-transparent text-sm text-gray-800 outline-none placeholder:text-gray-400"
               />
-              <button onClick={() => setShowGlobalSearch(false)} className="text-gray-400 hover:text-gray-700"><X size={18} /></button>
+              <button onClick={closePalette} className="text-gray-400 hover:text-gray-700"><X size={18} /></button>
             </div>
             <div className="max-h-[50vh] overflow-y-auto p-2">
-              {globalResults.length === 0 ? (
-                <p className="py-10 text-center text-sm text-gray-400">No canvases found.</p>
-              ) : globalResults.map((canvas) => (
+              {commandItems.length === 0 && projectResults.length === 0 && globalResults.length === 0 ? (
+                <p className="py-10 text-center text-sm text-gray-400">No commands, projects, or canvases found.</p>
+              ) : null}
+              {commandItems.length > 0 && (
+                <div className="mb-2">
+                  <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Commands</p>
+                  {commandItems.map((command) => (
+                    <button
+                      key={command.id}
+                      onClick={command.action}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-gray-50"
+                    >
+                      <div className="flex h-9 w-9 items-center justify-center rounded bg-gray-100 text-xs font-semibold text-gray-500">⌘</div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-gray-800">{command.title}</p>
+                        <p className="truncate text-xs text-gray-400">{command.description}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {projectResults.length > 0 && (
+                <div className="mb-2">
+                  <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Projects</p>
+                  {projectResults.map((project) => (
+                    <button
+                      key={project.id}
+                      onClick={() => { setSelectedProject(project); setView({ kind: "grid" }); closePalette(); }}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-gray-50"
+                    >
+                      <div className="flex h-9 w-9 items-center justify-center rounded bg-blue-50 text-xs font-semibold text-blue-600">P</div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-gray-800">{project.name}</p>
+                        <p className="truncate text-xs text-gray-400">{project.canvasCount ?? 0} canvases</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {globalResults.length > 0 && (
+                <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Canvases</p>
+              )}
+              {globalResults.map((canvas) => (
                 <button
                   key={canvas.id}
                   onClick={() => {
                     const project = projects.find((p) => p.id === canvas.projectId) ?? null;
                     setSelectedProject(project);
                     handleOpenCanvas(canvas);
-                    setShowGlobalSearch(false);
-                    setGlobalSearch("");
+                    closePalette();
                   }}
                   className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-gray-50"
                 >

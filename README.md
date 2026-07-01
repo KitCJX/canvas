@@ -11,7 +11,7 @@ Built with Next.js (static export) + Tauri v2.
 - **Two canvas engines** — Excalidraw (freehand drawing) and tldraw (structured diagramming), selectable per canvas
 - **Project organisation** — group canvases into named projects; rename projects and canvases inline or from context menus
 - **Recent dashboard** — open recently used canvases across all projects from the home view
-- **Global search** — search canvases by canvas name, project name, or canvas type with `Cmd/Ctrl+K`
+- **Command palette** — search canvases/projects and run common commands with `Cmd/Ctrl+K`
 - **Auto-save with status** — changes are debounced and written to SQLite automatically, with `Unsaved`, `Saving`, `Saved`, and `Save failed` states
 - **Manual save flush** — `Cmd/Ctrl+S` immediately flushes pending editor changes
 - **Version history** — each successful save creates a capped local snapshot; restore older versions from the editor
@@ -32,7 +32,7 @@ Built with Next.js (static export) + Tauri v2.
 | Shortcut | Action |
 |---|---|
 | `Cmd/Ctrl+N` | Create an untitled project from the dashboard, or an untitled Excalidraw canvas inside a selected project |
-| `Cmd/Ctrl+K` | Open global canvas search |
+| `Cmd/Ctrl+K` | Open command palette for search, project jumps, and common actions |
 | `Cmd/Ctrl+S` | Flush pending editor save immediately |
 | `Escape` | Close delete confirmations, search, or Trash |
 
