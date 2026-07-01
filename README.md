@@ -27,6 +27,7 @@ Built with Next.js (static export) + Tauri v2.
 - **Multi-select operations** — select multiple canvas cards and batch duplicate, move, export, or trash them
 - **Recency sorting** — canvases are ordered by last-opened time so the most recent work surfaces first
 - **Keyboard shortcuts** — `Cmd/Ctrl+N`, `Cmd/Ctrl+K`, `Cmd/Ctrl+S`, and `Escape`
+- **Dark mode** — app chrome follows system dark mode and supports explicit `data-theme="dark"` / `data-theme="light"` overrides
 
 ---
 
