@@ -1,10 +1,14 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
   verify:
@@ -29,9 +33,16 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Build frontend
-        run: npm run build
+      - name: Build macOS app
+        run: npm run tauri build
 
       - name: Test Tauri backend
         run: cargo test
         working-directory: src-tauri
+
+      - name: Upload macOS installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Canvas-Manager-macOS
+          path: src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
